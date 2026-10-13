@@ -26,5 +26,5 @@ def test_exact_allowlist_and_non_allowlisted_sender(tmp_path):
     approved = EmailMessage("1", "t", "trusted@example.com", "Hi", "hello")
     rejected = EmailMessage("2", "t", "trusted@example.com.evil", "Hi", "hello")
     assert agent.process_message(approved) == "error"
-    assert agent.process_message(approved) == "duplicate"
+    assert agent.process_message(approved) == "error"
     assert agent.process_message(rejected) == "ignored"

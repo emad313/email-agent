@@ -17,7 +17,9 @@ from safe_actions import execute_action
 from storage import Storage
 
 
-SUPPORTED_ACTIONS = frozenset({"reply", "research", "create_file", "computer"})
+SUPPORTED_ACTIONS = frozenset(
+    {"reply", "research", "create_file", "computer", "create_project"}
+)
 SUPPORTED_FORMATS = frozenset({"md", "txt", "csv", "json"})
 SUPPORTED_COMPUTER_ACTIONS = frozenset(
     {"list_workspace", "create_daily_note", "disk_usage"}
@@ -30,6 +32,8 @@ TASK_FIELDS = (
     "file_format",
     "file_content",
     "computer_action",
+    "project_name",
+    "project_files",
     "summary",
 )
 
@@ -43,26 +47,43 @@ class Task:
     file_format: str
     file_content: str
     computer_action: str
+    project_name: str
+    project_files: str
     summary: str
+
+
+class TaskValidationError(ValueError):
+    """Raised when the model returns a task outside the supported contract."""
 
 
 def validate_task(raw: dict[str, Any]) -> Task:
     values = {key: raw.get(key, "") for key in TASK_FIELDS}
     action = raw.get("action")
     if action not in SUPPORTED_ACTIONS:
-        raise ValueError(f"Unknown task action: {action!r}")
+        raise TaskValidationError(f"Unknown task action: {action!r}")
+    if action == "create_project" and isinstance(values["project_files"], dict):
+        values["project_files"] = json.dumps(values["project_files"])
     if not all(isinstance(value, str) for value in values.values()):
-        raise ValueError("Task fields must be strings")
+        raise TaskValidationError("Task fields must be strings")
     if action == "create_file":
         if values["file_format"] not in SUPPORTED_FORMATS:
-            raise ValueError("Unsupported file format")
+            raise TaskValidationError("Unsupported file format")
         if (
             not SAFE_NAME.fullmatch(values["file_name"])
             or Path(values["file_name"]).name != values["file_name"]
         ):
-            raise ValueError("Unsafe file name")
+            raise TaskValidationError("Unsafe file name")
     if action == "computer" and values["computer_action"] not in SUPPORTED_COMPUTER_ACTIONS:
-        raise ValueError("Unsupported computer action")
+        raise TaskValidationError("Unsupported computer action")
+    if action == "create_project":
+        if not SAFE_NAME.fullmatch(values["project_name"]):
+            raise TaskValidationError("Unsafe project name")
+        try:
+            project_files = json.loads(values["project_files"])
+        except json.JSONDecodeError as exc:
+            raise TaskValidationError("project_files must be valid JSON") from exc
+        if not isinstance(project_files, dict) or not project_files:
+            raise TaskValidationError("project_files must be a non-empty JSON object")
     return Task(action, **values)
 
 
@@ -100,6 +121,11 @@ class EmailAgent:
         )
         return validate_task(raw)
 
+    def _save_draft(self, message_id: str, body: str) -> None:
+        self.config.agent.drafts_path.mkdir(parents=True, exist_ok=True)
+        draft = self.config.agent.drafts_path / f"{message_id}.txt"
+        draft.write_text(body, encoding="utf-8")
+
     def process_message(self, message: EmailMessage) -> str:
         if message.sender not in self.config.allowed_senders:
             self.storage.record_message(
@@ -124,7 +150,24 @@ class EmailAgent:
             elif task.action == "create_file":
                 result = f"Created {self._write_file(task)} in the workspace."
             elif task.action == "computer":
-                result = execute_action(task.computer_action, self.config.agent.workspace_path)
+                result = execute_action(
+                    task.computer_action,
+                    self.config.agent.workspace_path,
+                    max_file_bytes=self.config.agent.max_file_bytes,
+                )
+            elif task.action == "create_project":
+                project_files = json.loads(task.project_files)
+                result = (
+                    "Created project "
+                    + execute_action(
+                        "create_project",
+                        self.config.agent.workspace_path,
+                        project_name=task.project_name,
+                        project_files=project_files,
+                        max_file_bytes=self.config.agent.max_file_bytes,
+                    )
+                    + " in the workspace."
+                )
             if self.config.agent.auto_reply:
                 try:
                     reply_id = self.gmail.send_reply(message, result)
@@ -147,12 +190,31 @@ class EmailAgent:
                 self.storage.update_message(message.message_id, "replied", task.summary, reply_id)
                 self.logger.info("Reply sent successfully for %s", message.message_id)
             else:
-                self.config.agent.drafts_path.mkdir(parents=True, exist_ok=True)
-                draft = self.config.agent.drafts_path / f"{message.message_id}.txt"
-                draft.write_text(result, encoding="utf-8")
+                self._save_draft(message.message_id, result)
                 self.storage.update_message(message.message_id, "drafted", task.summary)
             self.storage.log_action(message.message_id, task.action, "success", task.summary)
             return task.action
+        except TaskValidationError as exc:
+            clarification = (
+                "I could not safely classify this request. "
+                "Please clarify the task. Supported file formats are md, txt, csv, "
+                f"and json. Details: {exc}"
+            )
+            if self.config.agent.auto_reply:
+                reply_id = self.gmail.send_reply(message, clarification)
+                self.storage.update_message(
+                    message.message_id, "replied", "sent classification clarification", reply_id
+                )
+            else:
+                self._save_draft(message.message_id, clarification)
+                self.storage.update_message(
+                    message.message_id, "drafted", "saved classification clarification"
+                )
+            self.storage.log_action(
+                message.message_id, "clarification", "success", str(exc)
+            )
+            self.logger.warning("Saved clarification for invalid model task: %s", exc)
+            return "clarification"
         except Exception as exc:
             self.storage.update_message(message.message_id, "error", str(exc))
             self.storage.log_action(

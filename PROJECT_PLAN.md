@@ -48,7 +48,8 @@ optionally drafts or sends replies.
    - Implement bounded web research.
 3. **Agent workflow**
    - Add exact sender filtering, duplicate checks, task routing, safe action execution,
-     file generation, draft creation, optional reply sending, and error recovery.
+     file generation, controlled workspace project creation, draft creation, optional
+     reply sending, and error recovery.
 4. **CLI and operations**
    - Add `--once`, continuous mode, `--check-config`, `--test-gmail`,
      `--test-ollama`, and `--status`.

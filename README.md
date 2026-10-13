@@ -87,14 +87,22 @@ allowlisted sender; email text cannot select a different recipient.
 
 ## Supported tasks and limits
 
-The model can classify `reply`, `research`, `create_file`, and `computer`.
+The model can classify `reply`, `research`, `create_file`, `computer`, and
+`create_project`.
 Research uses a bounded DuckDuckGo HTML search and includes source URLs in the
 model-generated summary. Web and email content are untrusted data and are never
 treated as security instructions.
 
 Files support Markdown, text, CSV, and JSON and are written only under `workspace`.
-Names, size, overwrite behavior, and JSON/CSV content are validated. Computer
-actions are only `list_workspace`, `create_daily_note`, and `disk_usage`.
+Names, size, overwrite behavior, and JSON/CSV content are validated. A project
+request can create a new folder under `workspace` containing up to 20 approved
+text files; existing project folders are never overwritten. Computer actions are
+only `list_workspace`, `create_daily_note`, `disk_usage`, and the controlled
+`create_project` action.
+
+The agent does not currently open arbitrary applications, read arbitrary local
+files, access Google Drive, or execute commands. Those capabilities require
+separate explicit allowlists and, for sensitive operations, human approval.
 
 ## Tests
 

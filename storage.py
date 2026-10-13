@@ -65,6 +65,20 @@ class Storage:
         action: str | None = None, detail: str = "", received_at: str = "",
     ) -> bool:
         with self._connection() as db:
+            existing = db.execute(
+                "SELECT status FROM processed_messages WHERE message_id = ?",
+                (message_id,),
+            ).fetchone()
+            if existing is not None:
+                if existing["status"] != "error":
+                    return False
+                db.execute(
+                    """UPDATE processed_messages SET sender=?, subject=?, action=?,
+                    status=?, detail=?, received_at=?, processed_at=?,
+                    reply_message_id=NULL WHERE message_id=?""",
+                    (sender, subject, action, status, detail, received_at, utc_now(), message_id),
+                )
+                return True
             cursor = db.execute(
                 """INSERT OR IGNORE INTO processed_messages
                 (message_id, sender, subject, action, status, detail, received_at, processed_at)
