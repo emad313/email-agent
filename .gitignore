@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+config.yaml
+credentials.json
+token.json
+agent.db
+agent.log
+workspace/*
+!workspace/.gitkeep
+drafts/

@@ -1,0 +1,6 @@
+google-api-python-client>=2.150.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.1
+PyYAML>=6.0.2
+requests>=2.32.3
+pytest>=8.3.3

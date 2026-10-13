@@ -1,0 +1,21 @@
+# Enter multiple approved senders separated by commas.
+allowed_senders: "trusted.sender@example.com, another.sender@example.com"
+agent:
+  auto_reply: false
+  poll_interval_seconds: 60
+  max_messages_per_cycle: 5
+  gmail_query: "in:inbox -from:me"
+  database_path: "agent.db"
+  log_path: "agent.log"
+  workspace_path: "workspace"
+  drafts_path: "drafts"
+  max_body_chars: 12000
+  max_file_bytes: 1048576
+ollama:
+  endpoint: "http://127.0.0.1:11434"
+  model: "qwen2.5:3b"
+  timeout_seconds: 120
+  context_length: 4096
+  max_output_tokens: 500
+research:
+  max_results: 5
