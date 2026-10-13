@@ -10,3 +10,5 @@ agent.log
 workspace/*
 !workspace/.gitkeep
 drafts/
+
+prompt.txt
